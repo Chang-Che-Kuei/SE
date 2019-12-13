@@ -17,6 +17,8 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
+from ScheduleAlgorithm import ScheduleAlgorithm
+
 class User:
 	def __init__(self):
 		# The file token.pickle stores the user's access and refresh tokens, and is
@@ -26,31 +28,28 @@ class User:
 		# If modifying these scopes, delete the file token.pickle.
 		self.SCOPES = ['https://www.googleapis.com/auth/calendar']
 
-		
-
-	def Login(self):
 		if os.path.exists('token.pickle'):
 			with open('token.pickle', 'rb') as token:
-			    self.creds = pickle.load(token)
+				self.creds = pickle.load(token)
 		# If there are no (valid) credentials available, let the user log in.
 		if not self.creds or not self.creds.valid:
-		    if self.creds and self.creds.expired and self.creds.refresh_token:
-		        self.creds.refresh(Request())
-		    else:
-		        flow = InstalledAppFlow.from_client_secrets_file(
-		            'credentials.json', self.SCOPES)
-		        self.creds = flow.run_local_server(port=0)
-		    # Save the credentials for the next run
-		    with open('token.pickle', 'wb') as token:
-		        pickle.dump(self.creds, token)
+			if self.creds and self.creds.expired and self.creds.refresh_token:
+				self.creds.refresh(Request())
+			else:
+				flow = InstalledAppFlow.from_client_secrets_file(
+					'credentials.json', self.SCOPES)
+				self.creds = flow.run_local_server(port=0)
+			# Save the credentials for the next run
+			with open('token.pickle', 'wb') as token:
+				pickle.dump(self.creds, token)
 
 		self.service = build('calendar', 'v3', credentials=self.creds)
-		return True
-
+		self.algo = ScheduleAlgorithm(self.service)
+		
 	def CreateEvent(self,Info):
 		event = {
 		  'summary': '測試',
-		  'id': '1234567',
+		  'id': '1234gsfhdf567sss',
 		  'start': {
 		    'dateTime': '2019-12-12T2:00:00-00:00',
 		    #'timeZone': 'Asia/Taipei',
@@ -75,9 +74,11 @@ class User:
 
 def main():
 	user = User()
-	if user.Login():
-		eventID = '123456789'
-		user.CreateEvent({'summary':'test API'})
+	if user.service:
+		timeRange = {'start':[2019,12,12,8,0], 'end':[2019.12,19,17,0]}
+		user.algo.FindBlankBlock(timeRange)
+		#eventID = '12345zxczxc678cx9'
+		#user.CreateEvent({'summary':'test API'})
 		#user.UpdateEvent(eventID, {'summary':'update event'})
 		#user.DeleteEvent(eventID)
 
@@ -97,9 +98,7 @@ def main():
 	    start = event['start'].get('dateTime', event['start'].get('date'))
 	    print(start, event['summary'])
 '''
-[
-{'date':2019-12-12, 'start':[8,0], 'end':1400}, {'date':2019-12-13, 'start':0900, 'end':1300}
-]
+
 
 
 
