@@ -75,7 +75,7 @@ class User:
 def main():
 	user = User()
 	if user.service:
-		timeRange = {'start':[2019,12,12,8,0], 'end':[2019.12,19,17,0]}
+		timeRange = {'start':[2019,12,12,8,0], 'end':[2019,12,19,17,0]}
 		user.algo.FindBlankBlock(timeRange)
 		#eventID = '12345zxczxc678cx9'
 		#user.CreateEvent({'summary':'test API'})

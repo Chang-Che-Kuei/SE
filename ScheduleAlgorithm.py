@@ -12,23 +12,25 @@ class ScheduleAlgorithm:
 	def __init__(self,service):
 		self.service = service
 
-	def FindBlankBlock(self,timeRange):#(self,timeRange,pref):
-		d = datetime.datetime.now()
+	def GetUTCtimezone(self,date):
+		d = datetime.datetime(date[0],date[1],date[2],date[3],date[4])
 		#create Taipei timezone
 		tw = pytz.timezone('Asia/Taipei')
-		#set d timezone is 'Asia/Taipei'
-		twdt = tw.localize(d)
+		d = tw.localize(d)
 		#change to utc time
-		utc_dt = d.astimezone(pytz.utc).isoformat()+'Z'
-		utc_dt = utc_dt[:-7] + 'Z'
-		print(utc_dt)
+		d = d.astimezone(pytz.utc).isoformat()
+		d = d[:-6] + 'Z'
+		return d
 
-		now = datetime.datetime.now().isoformat() + 'Z' # 'Z' indicates UTC time
-		print(type(now),now)
-		print('Getting the upcoming 10 events')
-		events_result = self.service.events().list(calendarId='primary', timeMin=utc_dt,
-		                                    maxResults=10, singleEvents=True,
+	def FindBlankBlock(self,timeRange):#(self,timeRange,pref):
+		start,end = timeRange['start'], timeRange['end']
+		startD = self.GetUTCtimezone(start)
+		endD   = self.GetUTCtimezone(end)
+
+		events_result = self.service.events().list(calendarId='primary', timeMin=startD,
+		                                    timeMax=endD, singleEvents=True,
 		                                    orderBy='startTime').execute()
+		print(events_result['summary'])
 		events = events_result.get('items', [])
 		if not events:
 			print('No upcoming events found.')
