@@ -1,14 +1,3 @@
-'''
-from calendar_api.calendar_api import google_calendar_api
-
-m=google_calendar_api()
-m.create_event(calendar_id='184873625967-88hs5qi94u21c1n2t4tvrkhkn2jpctm4.apps.googleusercontent.com',
-start='2019,12,12,8,00,00',
-end='2017,12,12,9,15,00',
-description='foo'
-)
-'''
-
 from __future__ import print_function
 import datetime
 import pickle
@@ -76,30 +65,14 @@ def main():
 	user = User()
 	if user.service:
 		timeRange = {'start':[2019,12,12,8,0], 'end':[2019,12,19,17,0]}
-		user.algo.FindBlankBlock(timeRange)
+		blank = user.algo.FindBlankBlock(timeRange)
+		print(blank)
 		#eventID = '12345zxczxc678cx9'
 		#user.CreateEvent({'summary':'test API'})
 		#user.UpdateEvent(eventID, {'summary':'update event'})
 		#user.DeleteEvent(eventID)
 
-	'''
-	# Call the Calendar API
-	now = datetime.datetime.utcnow().isoformat() + 'Z' # 'Z' indicates UTC time
-	print(datetime.datetime.now())
-	print('Getting the upcoming 10 events')
-	events_result = service.events().list(calendarId='primary', timeMin=now,
-	                                    maxResults=10, singleEvents=True,
-	                                    orderBy='startTime').execute()
-	events = events_result.get('items', [])
-
-	if not events:
-	    print('No upcoming events found.')
-	for event in events:
-	    start = event['start'].get('dateTime', event['start'].get('date'))
-	    print(start, event['summary'])
-'''
-
-
+	
 
 
 if __name__ == '__main__':
