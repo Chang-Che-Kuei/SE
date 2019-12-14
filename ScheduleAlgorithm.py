@@ -81,7 +81,8 @@ class ScheduleAlgorithm:
 
 
 
-	#def AssignBlock(self,Event):
+	def AssignBlock(self,event,blank):
+		return 'Assign Successfully'
 
 
 
