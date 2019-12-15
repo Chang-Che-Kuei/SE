@@ -7,6 +7,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
 from ScheduleAlgorithm import ScheduleAlgorithm
+from Preference import Preference
 
 class User:
 	def __init__(self):
@@ -17,6 +18,7 @@ class User:
 		# If modifying these scopes, delete the file token.pickle.
 		self.SCOPES = ['https://www.googleapis.com/auth/calendar']
 
+		# open token.pickle
 		if os.path.exists('token.pickle'):
 			with open('token.pickle', 'rb') as token:
 				self.creds = pickle.load(token)
@@ -34,6 +36,7 @@ class User:
 
 		self.service = build('calendar', 'v3', credentials=self.creds)
 		self.algo = ScheduleAlgorithm(self.service)
+		self.pref = Preference()
 		
 	def CreateEvent(self,Info):
 		event = {
@@ -65,7 +68,7 @@ def main():
 	user = User()
 	if user.service:
 		timeRange = {'start':[2019,12,12,8,0], 'end':[2019,12,19,17,0]}
-		blank = user.algo.FindBlankBlock(timeRange)
+		blank = user.algo.FindBlankBlock(timeRange, user.pref)
 		print(blank)
 		#eventID = '12345zxczxc678cx9'
 		#user.CreateEvent({'summary':'test API'})

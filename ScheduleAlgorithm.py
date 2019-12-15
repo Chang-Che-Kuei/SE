@@ -24,14 +24,40 @@ class ScheduleAlgorithm:
 		d = d[:-6] + 'Z'
 		return d
 
-	def FindBlankBlock(self,timeRange):
+	def FilterByPref(self,dayNum,pref):
+		# Preference setting
+		# Yes: workingHr, forbiddenHr, timeGap ,minimumDuration 
+    	# No: maxEvents, valuableHr 
+		freeTime = np.zeros((dayNum,24*60+1)) # one day has 24*60 minutes. '1' indicates free time
+		
+		# Set workingHr
+		work = pref.workingHr
+		for i in range(0,len(work),2):
+			workStart = work[i][0]*60 + work[i][1]
+			workEnd   = work[i+1][0]*60 + work[i+1][1]
+			freeTime[ :, workStart:workEnd] = 1
+
+		# Set forbiddenHr
+		fordidden = pref.forbiddenHr
+		for i in range(0,len(fordidden),2):
+			forbStart = fordidden[i][0]*60 + fordidden[i][1]
+			forbEnd   = fordidden[i+1][0]*60 + fordidden[i+1][1]
+			freeTime[ :, forbStart:forbEnd] = 0
+
+
+		return freeTime
+
+	def FindBlankBlock(self,timeRange,pref):
+
 		#Init free time
 		start,end = timeRange['start'], timeRange['end']
 		dayNum = (datetime.date(end[0], end[1], end[2]) - 
 				  datetime.date(start[0], start[1], start[2]) ).days +1
-		freeTime = np.ones((dayNum,24*60+1)) # one day has 24*60 minutes. '1' indicates free time
+		freeTime = self.FilterByPref(dayNum,pref)
+		
+		# Set before start time and after send time to '0'
 		freeTime[0,0:start[3]*60+start[4]  ] = 0 # Invalid time
-		freeTime[dayNum-1,end[3]*60+end[4] + 1 : ] = 0
+		freeTime[dayNum-1,end[3]*60+end[4]  : ] = 0
 
 		# Get events from google calendar
 		startD = self.GetUTCtimezone(start)
@@ -52,7 +78,8 @@ class ScheduleAlgorithm:
 			dayIndex = (datetime.date(startE.year, startE.month, startE.day) - 
 				  datetime.date(start[0], start[1], start[2]) ).days 
 			# set the time range of this event to be invalid '0'
-			freeTime[dayIndex, startE.hour*60+startE.minute : endE.hour*60+endE.minute] = 0 
+			freeTime[dayIndex, startE.hour*60+startE.minute :
+					 endE.hour*60+endE.minute + pref.timeGap] = 0 
 			#print(event['summary'],event['start'].get('dateTime'))
 			#print(freeTime[dayIndex])
 
@@ -68,13 +95,13 @@ class ScheduleAlgorithm:
 				if (freeTime[day,minute] == 1) and (s == -1): # new start
 					s=minute
 					#print(s,minute,freeTime[day,minute])
-				elif (freeTime[day,minute] == 0 and s != -1) or minute==24*60: # found time block
+				elif (freeTime[day,minute] == 0 and s != -1) or (freeTime[day,minute] == 1 and minute==24*60) : # found time block
 					e = minute 
-					#print("AAAAAAAAAAa")
-					hrStart, minStart = int(s/60), s%60
-					hrEnd, minEnd = int(e/60), e%60
-					eachDay['block'].append([hrStart,minStart])
-					eachDay['block'].append([hrEnd,minEnd])
+					if e-s >= pref.minimumDuration:
+						hrStart, minStart = int(s/60), s%60
+						hrEnd, minEnd = int(e/60), e%60
+						eachDay['block'].append([hrStart,minStart])
+						eachDay['block'].append([hrEnd,minEnd])
 					s=-1
 			blank.append(eachDay)
 		return blank
