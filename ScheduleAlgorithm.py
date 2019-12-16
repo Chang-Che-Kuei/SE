@@ -106,39 +106,108 @@ class ScheduleAlgorithm:
 			blank.append(eachDay)
 		return blank
 
-	def IsFinalEventConflict(self,event,blank):
+	def IsEventValid(self,event,blank,pref):
 		# Determine there is a blank block for the final event
 		finalEvent = event['FinalEvent']
 		date = finalEvent['Start'][0:3]
 		finalStart = finalEvent['Start'][3]*60 + finalEvent['Start'][4]
 		finalEnd   = finalEvent['End'][3]*60   + finalEvent['End'][4]
 		validFinal = False
+		# Determine there are sufficient blank block for the preparation event
+		totalFreeTime = 0
+		preparartionHr = event['PreparingTime']['PreparingHours']
+		sufficentBlock = False
+		# the 'end' of pref.workingHr and pref.forbiddenHr don't need pref.timeGap
+		withoutGap = []
+		withoutGap.append(pref.workingHr[1])
+		withoutGap.extend(pref.forbiddenHr[0::2])
+		sufficientTime = False
+
 		for day in blank:
-			if day['date'] == date:
-				block = day['block']
-				for index in range(0,len(block),2):
-					start = block[index][0]*60 + block[index][1]
-					end   = block[index+1][0]*60 + block[index+1][1]
+			block = day['block']
+			for index in range(0,len(block),2):
+				start = block[index][0]*60 + block[index][1]
+				end   = block[index+1][0]*60 + block[index+1][1]
+				if day['date'] == date:
 					if start <= finalStart and end >= finalEnd:
 						validFinal = True
-						break
-			if validFinal == True:
-				break
-		return validFinal
 
+				if block[index+1] not in withoutGap:
+					end -= pref.timeGap
+				if end - start < pref.minimumDuration:
+					continue
+				totalFreeTime = totalFreeTime + (end-start)
+		if totalFreeTime/60 >= preparartionHr:
+			sufficientTime = True
+		return validFinal, sufficientTime, withoutGap
 
-	def AssignBlock(self,event,blank):
+	def MakePreparationEventFormat(self,event,timeInfo):
+		gooEvent = {}
+		day, start,end = timeInfo
+		startTime = day['date']+[int(start/60),start%60]
+		endTime =  day['date']+[int(end/60),end%60]
+
+		gooEvent['summary'] = event['EventName'] + '_Preparation'
+		gooEvent['start'] = {'dateTime': self.GetUTCtimezone(startTime)}
+		gooEvent['end'] = {'dateTime': self.GetUTCtimezone(endTime)}
+		gooEvent['colorId'] = 11
+		print(gooEvent)
+		return gooEvent
+
+	def MakeFinalEventFormat(self,event):
+		gooEvent = {}
+		gooEvent['summary'] = event['EventName']
+		finE = event['FinalEvent']
+		gooEvent['start'] = {'dateTime': self.GetUTCtimezone(finE['Start'])}
+		gooEvent['end'] = {'dateTime': self.GetUTCtimezone(finE['End'])}
+		gooEvent['location'] = finE['Location']
+		gooEvent['colorId'] = 11
+		print(gooEvent)
+		return gooEvent
+
+	def AssignBlock(self,event,blank,pref,service):
 		for i in blank:
 			print(i)
-		bValidFinal = self.IsFinalEventConflict(event,blank)
-		
-		# Preparation Event
+		# Check conditions
+		bValidFinal, bSufficientTime, withoutGap = self.IsEventValid(event,blank,pref)
+		# Return message
+		if not bValidFinal and not bSufficientTime:
+			return 'Final event is conflict and the preparation time is insufficient.'
+		elif not bValidFinal:
+			return 'Final event is conflict.'
+		elif not bSufficientTime:
+			return 'The preparation time is insufficient.'
 
-		# Final Event
-		if bValidFinal:
-			return 'Final event is valid.'
-		else :
-			return 'Final event is invalid.'
+		# Assign Preparation Event
+		prepMin = event['PreparingTime']['PreparingHours']*60
+		for day in blank:
+			block = day['block']
+			for index in range(0,len(block),2):
+				start = block[index][0]*60 + block[index][1]
+				end   = block[index+1][0]*60 + block[index+1][1]
+				# if the following event is the end of forbiddenHr or workingHr,
+				# don't need to substract with pref.minimumDuration
+				if block[index+1] not in withoutGap: 
+					end -= pref.timeGap
+				if end-start < pref.minimumDuration:
+					continue
+
+				if prepMin < end-start: # It is the last preparation event
+					end = start +prepMin
+				prepMin -= (end-start)
+				prepEvent = self.MakePreparationEventFormat(event,[day,start,end])
+				service.events().insert(calendarId='primary', body=prepEvent).execute()
+				if prepMin == 0:
+					break
+			if prepMin == 0:
+				break
+
+		# Assign Final Event
+		finEvent = self.MakeFinalEventFormat(event)
+		service.events().insert(calendarId='primary', body=finEvent).execute()
+
+		
+		return 'Assign Successfully.'
 
 
 

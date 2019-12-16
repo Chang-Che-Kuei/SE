@@ -68,13 +68,13 @@ eventForAssignBlock = {
 	'Description' : '資工系表演',
 	'Priority' : 20,
 	'PreparingTime' : {
-		'Start' : [2019,12,12,8,0],
-		'End'   : [2019,12,19,17,0],
-		'PreparingHours' : 30
+		'Start' : [2019,12,19,8,0],
+		'End'   : [2019,12,26,17,0],
+		'PreparingHours' : 15
 	},
 	'FinalEvent' : {
-		'Start' : [2019,12,19,10,0],
-		'End'   : [2019,12,19,15,0],
+		'Start' : [2019,12,26,13,0],
+		'End'   : [2019,12,26,15,0],
 		'Location' : '德田館'
 	}
 }
@@ -83,9 +83,9 @@ eventForAssignBlock = {
 def main():
 	user = User()
 	if user.service:
-		timeRange = {'start':[2019,12,12,8,0], 'end':[2019,12,19,18,0]}
+		timeRange = {'start':[2019,12,19,8,0], 'end':[2019,12,26,18,0]}
 		blank = user.algo.FindBlankBlock(timeRange, user.pref)
-		print(user.algo.AssignBlock(eventForAssignBlock,blank))
+		print(user.algo.AssignBlock(eventForAssignBlock,blank,user.pref,user.service))
 		#eventID = '12345zxczxc678cx9'
 		#user.CreateEvent({'summary':'test API'})
 		#user.UpdateEvent(eventID, {'summary':'update event'})
