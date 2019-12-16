@@ -106,10 +106,39 @@ class ScheduleAlgorithm:
 			blank.append(eachDay)
 		return blank
 
+	def IsFinalEventConflict(self,event,blank):
+		# Determine there is a blank block for the final event
+		finalEvent = event['FinalEvent']
+		date = finalEvent['Start'][0:3]
+		finalStart = finalEvent['Start'][3]*60 + finalEvent['Start'][4]
+		finalEnd   = finalEvent['End'][3]*60   + finalEvent['End'][4]
+		validFinal = False
+		for day in blank:
+			if day['date'] == date:
+				block = day['block']
+				for index in range(0,len(block),2):
+					start = block[index][0]*60 + block[index][1]
+					end   = block[index+1][0]*60 + block[index+1][1]
+					if start <= finalStart and end >= finalEnd:
+						validFinal = True
+						break
+			if validFinal == True:
+				break
+		return validFinal
 
 
 	def AssignBlock(self,event,blank):
-		return 'Assign Successfully'
+		for i in blank:
+			print(i)
+		bValidFinal = self.IsFinalEventConflict(event,blank)
+		
+		# Preparation Event
+
+		# Final Event
+		if bValidFinal:
+			return 'Final event is valid.'
+		else :
+			return 'Final event is invalid.'
 
 
 

@@ -63,13 +63,29 @@ class User:
 	def DeleteEvent(self,eventID):
 		self.service.events().delete(calendarId='primary', eventId=eventID).execute()
 
+eventForAssignBlock = {
+	'EventName' : '資工之夜',
+	'Description' : '資工系表演',
+	'Priority' : 20,
+	'PreparingTime' : {
+		'Start' : [2019,12,12,8,0],
+		'End'   : [2019,12,19,17,0],
+		'PreparingHours' : 30
+	},
+	'FinalEvent' : {
+		'Start' : [2019,12,19,10,0],
+		'End'   : [2019,12,19,15,0],
+		'Location' : '德田館'
+	}
+}
+
 
 def main():
 	user = User()
 	if user.service:
-		timeRange = {'start':[2019,12,12,8,0], 'end':[2019,12,19,17,0]}
+		timeRange = {'start':[2019,12,12,8,0], 'end':[2019,12,19,18,0]}
 		blank = user.algo.FindBlankBlock(timeRange, user.pref)
-		print(blank)
+		print(user.algo.AssignBlock(eventForAssignBlock,blank))
 		#eventID = '12345zxczxc678cx9'
 		#user.CreateEvent({'summary':'test API'})
 		#user.UpdateEvent(eventID, {'summary':'update event'})

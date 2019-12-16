@@ -9,7 +9,7 @@ class Preference:
 		self.minimumDuration = 20 # minutes
 		self.maxEvents = 5 # in a day
 
-	def SetPreference(self,prefInfo):
+	def SetPreference(self,prefInfo):# Connect to Django
 		self.workingHr = prefInfo['workingHr']
 		self.forbiddenHr = prefInfo['forbiddenHr']
 		# and so on...
