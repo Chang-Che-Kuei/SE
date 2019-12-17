@@ -251,10 +251,12 @@ class ScheduleAlgorithm:
 
 	def DetectConflict(self, event):
 		now = datetime.datetime.utcnow().isoformat() + 'Z'
-		events_result = self.service.events().list(calendarId='primary', timeMin=now, maxResults=10, singleEvents=True, orderBy='startTime').execute()
+		events_result = self.service.events().list(calendarId='primary', timeMin=now, singleEvents=True, orderBy='startTime').execute()
 		events = events_result.get('items', [])
 		start = []
 		end = []
+		event['start']['dateTime'] = event['start']['dateTime'].replace('Z', '+08:00')
+		#print(event['start']['dateTime'])
 		event_start = datetime.datetime.strptime(event['start']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
 		event_end = datetime.datetime.strptime(event['end']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
 		for i in range(len(events)):
@@ -263,9 +265,6 @@ class ScheduleAlgorithm:
 			start.append(x)
 			end.append(y)
 		for i in range(len(start)):
-			if events[i]['id'] == event['id']:
-				print('same')
-				continue
 			if event_start < end[i] and event_end > start[i]:
 				print(event_start, event_end, start[i], end[i])
 				return True
