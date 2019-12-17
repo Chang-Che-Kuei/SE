@@ -79,6 +79,7 @@ class ScheduleAlgorithm:
 
 			startDayIndex = (datetime.date(startE.year, startE.month, startE.day) - 
 				  datetime.date(start[0], start[1], start[2]) ).days 
+
 			endDayIndex = (datetime.date(endE.year, endE.month, endE.day) - 
 				  datetime.date(start[0], start[1], start[2]) ).days 
 			# set the duration of this event to be invalid '0'
@@ -99,10 +100,9 @@ class ScheduleAlgorithm:
 				else: #middle day
 					freeTime[:,:] = 0
 
-			# set the timeGap before and after this event to be invalid '0'
-			
+			# set the timeGap after this event to be invalid '0'
 			freeTime[endDayIndex, endE.hour*60+endE.minute :
-					 endE.hour*60+endE.minute + pref.timeGap] = 0 
+					endE.hour*60+endE.minute + pref.timeGap] = 0 
 			#print(event['summary'],event['start'].get('dateTime'))
 			#print(freeTime[dayIndex])
 
@@ -112,6 +112,7 @@ class ScheduleAlgorithm:
 		blank = {}
 		for day in range(dayNum):
 			today =  firstDay + datetime.timedelta(days=day)
+
 			date = str(today.year) + '-' + str(today.month) + '-' + str(today.day)
 			block = []
 			s, e = -1, -1
@@ -124,12 +125,12 @@ class ScheduleAlgorithm:
 					if e-s >= pref.minimumDuration:
 						hrStart, minStart = int(s/60), s%60
 						hrEnd, minEnd = int(e/60), e%60
+
 						block.append([hrStart,minStart])
 						block.append([hrEnd,minEnd])
 					s=-1
 			blank[date] = block
 		print(blank,'\n',numDayEvent)
-		return blank, numDayEvent
 
 	def IsEventValid(self,event,blank,pref):
 		# Determine there is a blank block for the final event
@@ -147,6 +148,7 @@ class ScheduleAlgorithm:
 		withoutGap.append(pref.workingHr[1])
 		withoutGap.extend(pref.forbiddenHr[0::2])
 		sufficientTime = False
+
 
 		for blankDate in blank:
 			block = blank[blankDate]
@@ -235,6 +237,100 @@ class ScheduleAlgorithm:
 		
 		return 'Assign Successfully.'
 
+	def DetectConflict(self, event):
+		now = datetime.datetime.utcnow().isoformat() + 'Z'
+		events_result = self.service.events().list(calendarId='primary', timeMin=now, maxResults=10, singleEvents=True, orderBy='startTime').execute()
+		events = events_result.get('items', [])
+		start = []
+		end = []
+		event_start = datetime.datetime.strptime(event['start']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
+		event_end = datetime.datetime.strptime(event['end']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
+		for i in range(len(events)):
+			x = datetime.datetime.strptime(events[i]['start']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
+			y = datetime.datetime.strptime(events[i]['end']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
+			start.append(x)
+			end.append(y)
+		for i in range(len(start)):
+			if events[i]['id'] == event['id']:
+				print('same')
+				continue
+			if event_start < end[i] and event_end > start[i]:
+				print(event_start, event_end, start[i], end[i])
+				return True
+		return False
+
+	def NewEvent(self, event, start, end):
+		new = {}
+		exclude = ['id', 'kind', 'etag', 'status', 'htmlLink', 'created', 'updated', 'iCalUID', 'sequence']
+		for key, value in event.items():
+			if key not in exclude:
+				new[key] = value
+			else:
+				pass
+		new['start'] = {
+			'dateTime': self.GetUTCtimezone(start)
+			}
+		new['end'] = {
+			'dateTime': self.GetUTCtimezone(end)
+			}
+		return new
+
+	def CheckFreeTotalBeforeEvent(self, blank_block, hrStart, minStart):
+		free_total = 0
+		for j in range(0, len(blank_block), 2):
+			if blank_block[j][0] * 60 + blank_block[j][1] < hrStart*60 + minStart:  # early block
+				free_total += blank_block[j+1][0] * 60+blank_block[j+1][1] - blank_block[j][0] * 60 - blank_block[j][1]
+		return free_total
+
+	def TimeShift(self, pref, day_of_deleted_event):
+		year, month, day = [int(j) for j in day_of_deleted_event[:10].split('-')]
+		timeMin = [year, month, day, pref.workingHr[0][0], pref.workingHr[0][1]]
+		timeMax = [year, month, day, pref.workingHr[-1][0], pref.workingHr[-1][1]]
+		timeRange={'start': timeMin, 'end': timeMax}
+		blank = self.FindBlankBlock(timeRange, pref)
+		#print(blank)
+		# get all events on the day of the deleted event                
+		events_result = self.service.events().list(calendarId='primary', timeMin=self.GetUTCtimezone(timeMin), timeMax=self.GetUTCtimezone(timeMax), singleEvents=True, orderBy='startTime').execute()
+		events = events_result.get('items', [])
+		
+
+		for i in range(len(events)):
+			if events[i]['summary'][-11:] == 'Preparation': # need to shift the preparation events only
+			#	print(events[i]['summary'])
+				event_date = events[i]['start']['dateTime'][:10]
+				year, month, day = [int(j) for j in event_date.split('-')]
+				hrStart, minStart = [int(j) for j in events[i]['start']['dateTime'][11:16].split(':')]
+				hrEnd, minEnd = [int(j) for j in events[i]['end']['dateTime'][11:16].split(':')]
+				duration = hrEnd*60 + minEnd - hrStart*60 - minStart
+				#print(event_date, hrStart, minStart, hrEnd, minEnd, duration)
+				blank_block = blank[event_date]
+				# get the free total time before the event
+				free_total = self.CheckFreeTotalBeforeEvent(blank_block, hrStart, minStart)
+				print("free total = {}".format(free_total)) 
+				for j in range(0, len(blank_block), 2):
+					if blank_block[j][0] * 60 + blank_block[j][1] >= hrStart*60 + minStart:
+						break
+					block_duration = blank_block[j+1][0] * 60+blank_block[j+1][1] - blank_block[j][0] * 60 - blank_block[j][1]
+					start = [year, month, day, blank_block[j][0], blank_block[j][1]]
+					if block_duration >= duration:
+						total = blank_block[j][0]*60+blank_block[j][1] + duration
+						end = [year, month, day, int(total / 60), total % 60]
+						duration = 0
+					elif block_duration < duration and block_duration >= pref.minimumDuration:
+						end = [year, month, day, blank_block[j+1][0], blank_block[j+1][1]]
+						duration -= block_duration
+					e = self.NewEvent(events[i], start, end)
+					#print(start)
+					#print(end)
+					self.service.events().insert(calendarId='primary', body=e).execute()
+					if duration <= 0:
+						self.service.events().delete(calendarId='primary', eventId=events[i]['id']).execute()
+						break
+				if duration > 0:
+					print(duration)
+					NewEndTime = hrStart*60 + minStart + duration
+					events[i]['end']['dateTime'] = self.GetUTCtimezone([year, month, day, int(NewEndTime / 60), int(NewEndTime % 60)])
+					self.service.events().patch(calendarId='primary', eventId=events[i]['id'], body=events[i]).execute()                                        
 
 
 '''
@@ -248,6 +344,7 @@ Returned data from FindBlankBlock(self,timeRange)
 	{'date': [2019, 12, 16], 'block': [[0, 0], [24, 0]]}
 ]
 
+<<<<<<< HEAD
 2019.12.16 Fix Issues
 1. Blank block format
 {
@@ -257,3 +354,6 @@ Returned data from FindBlankBlock(self,timeRange)
 2. Final event can cross multiple days.
 3. MaxEvent and 重新判斷會不會因為MaxEvent而無法放Preparation
 '''
+
+'''
+>>>>>>> 021dc20a79aeffee8d21520a2834bcd548f0262d
