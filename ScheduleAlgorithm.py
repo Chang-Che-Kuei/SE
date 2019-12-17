@@ -66,10 +66,14 @@ class ScheduleAlgorithm:
 		events = self.service.events().list(calendarId='primary', timeMin=startD,
 		                                    timeMax=endD, singleEvents=True,
 		                                    orderBy='startTime').execute()
-
+		# Init the number of daily event to be 0
+		numDayEvent = {}
+		for dayIndex in range(dayNum):
+			today = datetimeStart + datetime.timedelta(days=dayIndex)
+			strToday = str(today.year) + '-' + str(today.month) + '-' + str(today.day)
+			numDayEvent[strToday] = 0
 		# Set the time which is been occupied by events to be invalid
 		events = events.get('items', [])
-		numDayEvent = {}
 		for event in events:
 			startE = event['start']['dateTime'] # '2019-12-12T16:00:00+08:00'
 			endE = event['end']['dateTime'] 
@@ -86,10 +90,7 @@ class ScheduleAlgorithm:
 			for day in range(startDayIndex,endDayIndex+1):
 				date = datetimeStart + datetime.timedelta(days=day)
 				strDate = str(date.year) + '-' + str(date.month) + '-' + str(date.day)
-				if strDate in numDayEvent:
-					numDayEvent[strDate] +=1
-				else:
-					numDayEvent[strDate] = 1
+				numDayEvent[strDate] +=1
 
 				if startDayIndex == endDayIndex: # one-day event
 					freeTime[day, startE.hour*60+startE.minute: endE.hour*60+endE.minute] = 0
@@ -131,6 +132,7 @@ class ScheduleAlgorithm:
 					s=-1
 			blank[date] = block
 		print(blank,'\n',numDayEvent)
+		return blank, numDayEvent
 
 	def IsEventValid(self,event,blank,pref):
 		# Determine there is a blank block for the final event
@@ -209,8 +211,11 @@ class ScheduleAlgorithm:
 
 		# Assign Preparation Event
 		prepMin = event['PreparingTime']['PreparingHours']*60
+		AllEvent = []
 		for date, block in blank.items():
 			for index in range(0,len(block),2):
+				if numDayEvent[date] >= pref.maxEvents: # Reach daily maximum number events
+					continue
 				start = block[index][0]*60 + block[index][1]
 				end   = block[index+1][0]*60 + block[index+1][1]
 				# if the following event is the end of forbiddenHr or workingHr,
@@ -224,11 +229,18 @@ class ScheduleAlgorithm:
 					end = start +prepMin
 				prepMin -= (end-start)
 				prepEvent = self.MakePreparationEventFormat(event,[date,start,end])
-				service.events().insert(calendarId='primary', body=prepEvent).execute()
+
+				AllEvent.append(prepEvent)
+				numDayEvent[date] += 1
 				if prepMin == 0:
 					break
 			if prepMin == 0:
 				break
+		if prepMin != 0:
+			print('prepMin = '+str(prepMin))
+			return 'Assigning blocks failed due to the number of maximum event.'
+		for e in AllEvent:
+			service.events().insert(calendarId='primary', body=e).execute()
 
 		# Assign Final Event
 		finEvent = self.MakeFinalEventFormat(event)
@@ -344,16 +356,4 @@ Returned data from FindBlankBlock(self,timeRange)
 	{'date': [2019, 12, 16], 'block': [[0, 0], [24, 0]]}
 ]
 
-<<<<<<< HEAD
-2019.12.16 Fix Issues
-1. Blank block format
-{
-	'2019-12-12': [[8, 0], [16, 0], [17, 0], [24, 0]]
-}
-
-2. Final event can cross multiple days.
-3. MaxEvent and 重新判斷會不會因為MaxEvent而無法放Preparation
 '''
-
-'''
->>>>>>> 021dc20a79aeffee8d21520a2834bcd548f0262d

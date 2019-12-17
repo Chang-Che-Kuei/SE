@@ -70,7 +70,7 @@ eventForAssignBlock = {
 	'PreparingTime' : {
 		'Start' : [2019,12,19,8,0],
 		'End'   : [2019,12,26,17,0],
-		'PreparingHours' :15
+		'PreparingHours' :3
 	},
 	'FinalEvent' : {
 		'Start' : [2019,12,26,13,0],
@@ -84,8 +84,8 @@ def main():
 	user = User()
 	if user.service:
 		timeRange = {'start':[2019,12,19,8,0], 'end':[2019,12,26,18,0]}
-		blank = user.algo.FindBlankBlock(timeRange, user.pref)
-		print(user.algo.AssignBlock(eventForAssignBlock,blank,user.pref,user.service))
+		blankAndEvent = user.algo.FindBlankBlock(timeRange, user.pref)
+		print(user.algo.AssignBlock(eventForAssignBlock,blankAndEvent,user.pref,user.service))
 		#eventID = '12345zxczxc678cx9'
 		#user.CreateEvent({'summary':'test API'})
 		#user.UpdateEvent(eventID, {'summary':'update event'})
