@@ -51,11 +51,12 @@ class ScheduleAlgorithm:
 
 		#Init free time
 		start,end = timeRange['start'], timeRange['end']
+		datetimeStart = datetime.date(start[0],start[1],start[2])
 		dayNum = (datetime.date(end[0], end[1], end[2]) - 
 				  datetime.date(start[0], start[1], start[2]) ).days +1
 		freeTime = self.FilterByPref(dayNum,pref)
 		
-		# Set before start time and after send time to '0'
+		# Set before start time and after end time to '0'
 		freeTime[0,0:start[3]*60+start[4]  ] = 0 # Invalid time
 		freeTime[dayNum-1,end[3]*60+end[4]  : ] = 0
 
@@ -68,17 +69,39 @@ class ScheduleAlgorithm:
 
 		# Set the time which is been occupied by events to be invalid
 		events = events.get('items', [])
+		numDayEvent = {}
 		for event in events:
 			startE = event['start']['dateTime'] # '2019-12-12T16:00:00+08:00'
 			endE = event['end']['dateTime'] 
 			#convert isoforamt to datetime object
 			startE =  dateutil.parser.parse(startE) # '2019-12-12 16:00:00+08:00'
 			endE = dateutil.parser.parse(endE)
-			
-			dayIndex = (datetime.date(startE.year, startE.month, startE.day) - 
+
+			startDayIndex = (datetime.date(startE.year, startE.month, startE.day) - 
 				  datetime.date(start[0], start[1], start[2]) ).days 
-			# set the time range of this event to be invalid '0'
-			freeTime[dayIndex, startE.hour*60+startE.minute :
+			endDayIndex = (datetime.date(endE.year, endE.month, endE.day) - 
+				  datetime.date(start[0], start[1], start[2]) ).days 
+			# set the duration of this event to be invalid '0'
+			for day in range(startDayIndex,endDayIndex+1):
+				date = datetimeStart + datetime.timedelta(days=day)
+				strDate = str(date.year) + '-' + str(date.month) + '-' + str(date.day)
+				if strDate in numDayEvent:
+					numDayEvent[strDate] +=1
+				else:
+					numDayEvent[strDate] = 1
+
+				if startDayIndex == endDayIndex: # one-day event
+					freeTime[day, startE.hour*60+startE.minute: endE.hour*60+endE.minute] = 0
+				elif startDayIndex == day: # first day 
+					freeTime[day, startE.hour*60+startE.minute: 24*60] = 0
+				elif endDayIndex == day: # last day 
+					freeTime[day, 0:endE.hour*60+endE.minute] = 0
+				else: #middle day
+					freeTime[:,:] = 0
+
+			# set the timeGap before and after this event to be invalid '0'
+			
+			freeTime[endDayIndex, endE.hour*60+endE.minute :
 					 endE.hour*60+endE.minute + pref.timeGap] = 0 
 			#print(event['summary'],event['start'].get('dateTime'))
 			#print(freeTime[dayIndex])
@@ -86,10 +109,11 @@ class ScheduleAlgorithm:
 
 		# Find the blank block
 		firstDay = datetime.datetime(start[0],start[1],start[2])
-		blank = []
+		blank = {}
 		for day in range(dayNum):
 			today =  firstDay + datetime.timedelta(days=day)
-			eachDay = {'date':[today.year, today.month, today.day],'block':[]}
+			date = str(today.year) + '-' + str(today.month) + '-' + str(today.day)
+			block = []
 			s, e = -1, -1
 			for minute in range(24*60+1):
 				if (freeTime[day,minute] == 1) and (s == -1): # new start
@@ -100,16 +124,17 @@ class ScheduleAlgorithm:
 					if e-s >= pref.minimumDuration:
 						hrStart, minStart = int(s/60), s%60
 						hrEnd, minEnd = int(e/60), e%60
-						eachDay['block'].append([hrStart,minStart])
-						eachDay['block'].append([hrEnd,minEnd])
+						block.append([hrStart,minStart])
+						block.append([hrEnd,minEnd])
 					s=-1
-			blank.append(eachDay)
-		return blank
+			blank[date] = block
+		print(blank,'\n',numDayEvent)
+		return blank, numDayEvent
 
 	def IsEventValid(self,event,blank,pref):
 		# Determine there is a blank block for the final event
 		finalEvent = event['FinalEvent']
-		date = finalEvent['Start'][0:3]
+		date = str(finalEvent['Start'][0])+str(finalEvent['Start'][1])+str(finalEvent['Start'][2])
 		finalStart = finalEvent['Start'][3]*60 + finalEvent['Start'][4]
 		finalEnd   = finalEvent['End'][3]*60   + finalEvent['End'][4]
 		validFinal = False
@@ -123,12 +148,13 @@ class ScheduleAlgorithm:
 		withoutGap.extend(pref.forbiddenHr[0::2])
 		sufficientTime = False
 
-		for day in blank:
-			block = day['block']
+		for blankDate in blank:
+			block = blank[blankDate]
 			for index in range(0,len(block),2):
 				start = block[index][0]*60 + block[index][1]
 				end   = block[index+1][0]*60 + block[index+1][1]
-				if day['date'] == date:
+				blankDate = blankDate.replace('-','')
+				if blankDate == date:
 					if start <= finalStart and end >= finalEnd:
 						validFinal = True
 
@@ -143,9 +169,11 @@ class ScheduleAlgorithm:
 
 	def MakePreparationEventFormat(self,event,timeInfo):
 		gooEvent = {}
-		day, start,end = timeInfo
-		startTime = day['date']+[int(start/60),start%60]
-		endTime =  day['date']+[int(end/60),end%60]
+		date, start,end = timeInfo
+		date = date.replace('-','')
+		dateList = [int(date[0:4]),int(date[4:6]),int(date[6:8])]
+		startTime = dateList+[int(start/60),start%60]
+		endTime =  dateList+[int(end/60),end%60]
 
 		gooEvent['summary'] = event['EventName'] + '_Preparation'
 		gooEvent['start'] = {'dateTime': self.GetUTCtimezone(startTime)}
@@ -165,10 +193,9 @@ class ScheduleAlgorithm:
 		print(gooEvent)
 		return gooEvent
 
-	def AssignBlock(self,event,blank,pref,service):
-		for i in blank:
-			print(i)
+	def AssignBlock(self,event,blankAndEvent,pref,service):
 		# Check conditions
+		blank, numDayEvent = blankAndEvent
 		bValidFinal, bSufficientTime, withoutGap = self.IsEventValid(event,blank,pref)
 		# Return message
 		if not bValidFinal and not bSufficientTime:
@@ -180,8 +207,7 @@ class ScheduleAlgorithm:
 
 		# Assign Preparation Event
 		prepMin = event['PreparingTime']['PreparingHours']*60
-		for day in blank:
-			block = day['block']
+		for date, block in blank.items():
 			for index in range(0,len(block),2):
 				start = block[index][0]*60 + block[index][1]
 				end   = block[index+1][0]*60 + block[index+1][1]
@@ -195,7 +221,7 @@ class ScheduleAlgorithm:
 				if prepMin < end-start: # It is the last preparation event
 					end = start +prepMin
 				prepMin -= (end-start)
-				prepEvent = self.MakePreparationEventFormat(event,[day,start,end])
+				prepEvent = self.MakePreparationEventFormat(event,[date,start,end])
 				service.events().insert(calendarId='primary', body=prepEvent).execute()
 				if prepMin == 0:
 					break
@@ -222,4 +248,12 @@ Returned data from FindBlankBlock(self,timeRange)
 	{'date': [2019, 12, 16], 'block': [[0, 0], [24, 0]]}
 ]
 
+2019.12.16 Fix Issues
+1. Blank block format
+{
+	'2019-12-12': [[8, 0], [16, 0], [17, 0], [24, 0]]
+}
+
+2. Final event can cross multiple days.
+3. MaxEvent and 重新判斷會不會因為MaxEvent而無法放Preparation
 '''

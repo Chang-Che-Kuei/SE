@@ -70,7 +70,7 @@ eventForAssignBlock = {
 	'PreparingTime' : {
 		'Start' : [2019,12,19,8,0],
 		'End'   : [2019,12,26,17,0],
-		'PreparingHours' : 15
+		'PreparingHours' :15
 	},
 	'FinalEvent' : {
 		'Start' : [2019,12,26,13,0],
