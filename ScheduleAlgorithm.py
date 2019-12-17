@@ -256,7 +256,7 @@ class ScheduleAlgorithm:
 		start = []
 		end = []
 		event['start']['dateTime'] = event['start']['dateTime'].replace('Z', '+08:00')
-		#print(event['start']['dateTime'])
+		event['end']['dateTime'] = event['end']['dateTime'].replace('Z', '+08:00')
 		event_start = datetime.datetime.strptime(event['start']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
 		event_end = datetime.datetime.strptime(event['end']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
 		for i in range(len(events)):
