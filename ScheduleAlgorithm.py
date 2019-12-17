@@ -299,7 +299,7 @@ class ScheduleAlgorithm:
 		timeMin = [year, month, day, pref.workingHr[0][0], pref.workingHr[0][1]]
 		timeMax = [year, month, day, pref.workingHr[-1][0], pref.workingHr[-1][1]]
 		timeRange={'start': timeMin, 'end': timeMax}
-		blank = self.FindBlankBlock(timeRange, pref)
+		#blank = self.FindBlankBlock(timeRange, pref)
 		#print(blank)
 		# get all events on the day of the deleted event                
 		events_result = self.service.events().list(calendarId='primary', timeMin=self.GetUTCtimezone(timeMin), timeMax=self.GetUTCtimezone(timeMax), singleEvents=True, orderBy='startTime').execute()
@@ -308,6 +308,7 @@ class ScheduleAlgorithm:
 
 		for i in range(len(events)):
 			if events[i]['summary'][-11:] == 'Preparation': # need to shift the preparation events only
+				blank = self.FindBlankBlock(timeRange, pref)[0]
 			#	print(events[i]['summary'])
 				event_date = events[i]['start']['dateTime'][:10]
 				year, month, day = [int(j) for j in event_date.split('-')]
