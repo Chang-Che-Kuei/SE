@@ -250,26 +250,37 @@ class ScheduleAlgorithm:
 		return 'Assign Successfully.'
 
 	def DetectConflict(self, event):
-		now = datetime.datetime.utcnow().isoformat() + 'Z'
-		events_result = self.service.events().list(calendarId='primary', timeMin=now, singleEvents=True, orderBy='startTime').execute()
-		events = events_result.get('items', [])
-		start = []
-		end = []
-		event['start']['dateTime'] = event['start']['dateTime'].replace('Z', '+08:00')
-		event['end']['dateTime'] = event['end']['dateTime'].replace('Z', '+08:00')
-		event_start = datetime.datetime.strptime(event['start']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
-		event_end = datetime.datetime.strptime(event['end']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
-		for i in range(len(events)):
-			x = datetime.datetime.strptime(events[i]['start']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
-			y = datetime.datetime.strptime(events[i]['end']['dateTime'][:-6], '%Y-%m-%dT%H:%M:%S')
-			start.append(x)
-			end.append(y)
-		for i in range(len(start)):
-			if event_start < end[i] and event_end > start[i]:
-				print(event_start, event_end, start[i], end[i])
+		startD = self.GetUTCtimezone(startTime)
+		endD   = self.GetUTCtimezone(endTime)
+		events = self.service.events().list(calendarId='primary', timeMin=startD,
+		                                    timeMax=endD, singleEvents=True,
+		                                    orderBy='startTime').execute()
+		events = events.get('items', [])
+		for event in events:
+			print(event)
+			startE = event['start']['dateTime'] # '2019-12-12T16:00:00+08:00'
+			endE = event['end']['dateTime'] 
+			#convert isoforamt to datetime object
+			startE =  dateutil.parser.parse(startE) # '2019-12-12 16:00:00+08:00'
+			endE = dateutil.parser.parse(endE)
+
+			from collections import namedtuple
+			Range = namedtuple('Range', ['start', 'end'])
+
+			# have bug when startE.minute is 59, startE.minute+1 exceeds 60
+			r1 = Range(start=datetime.datetime(startTime[0],startTime[1],startTime[2],startTime[3],startTime[4]),
+			 	end=datetime.datetime(endTime[0],endTime[1],endTime[2],endTime[3],endTime[4]))
+			r2 = Range(start=datetime.datetime(startE.year, startE.month, startE.day,startE.hour,startE.minute+1), 
+				end=datetime.datetime(endE.year, endE.month, endE.day,endE.hour, endE.minute))
+			#print('hi',r1,r2)
+			latest_start = max(r1.start, r2.start)
+			earliest_end = min(r1.end, r2.end)
+			delta = (earliest_end - latest_start).days + 1
+			overlap = max(0, delta)
+			if overlap >0:
 				return True
 		return False
-
+		
 	def NewEvent(self, event, start, end):
 		new = {}
 		exclude = ['id', 'kind', 'etag', 'status', 'htmlLink', 'created', 'updated', 'iCalUID', 'sequence']
