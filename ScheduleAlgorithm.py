@@ -93,17 +93,14 @@ class ScheduleAlgorithm:
 				numDayEvent[strDate] +=1
 
 				if startDayIndex == endDayIndex: # one-day event
-					freeTime[day, startE.hour*60+startE.minute: endE.hour*60+endE.minute] = 0
+					freeTime[day, startE.hour*60+startE.minute-pref.timeGap: endE.hour*60+endE.minute+pref.timeGap] = 0
 				elif startDayIndex == day: # first day 
-					freeTime[day, startE.hour*60+startE.minute: 24*60] = 0
+					freeTime[day, startE.hour*60+startE.minute-pref.timeGap: 24*60] = 0
 				elif endDayIndex == day: # last day 
-					freeTime[day, 0:endE.hour*60+endE.minute] = 0
-				else: #middle day
+					freeTime[day, 0:endE.hour*60+endE.minute+pref.timeGap] = 0
+				else: #middle day --> whole day
 					freeTime[:,:] = 0
 
-			# set the timeGap after this event to be invalid '0'
-			freeTime[endDayIndex, endE.hour*60+endE.minute :
-					endE.hour*60+endE.minute + pref.timeGap] = 0 
 			#print(event['summary'],event['start'].get('dateTime'))
 			#print(freeTime[dayIndex])
 
@@ -131,26 +128,25 @@ class ScheduleAlgorithm:
 						block.append([hrEnd,minEnd])
 					s=-1
 			blank[date] = block
-		print(blank,'\n',numDayEvent)
+		#print(blank,'\n',numDayEvent)
 		return blank, numDayEvent
 
 	def IsEventValid(self,event,blank,pref):
 		# Determine there is a blank block for the final event
-		finalEvent = event['FinalEvent']
-		date = str(finalEvent['Start'][0])+str(finalEvent['Start'][1])+str(finalEvent['Start'][2])
-		finalStart = finalEvent['Start'][3]*60 + finalEvent['Start'][4]
-		finalEnd   = finalEvent['End'][3]*60   + finalEvent['End'][4]
 		validFinal = False
+		if 'FinalEvent' in event:
+			finalEvent = event['FinalEvent']
+			date = str(finalEvent['Start'][0])+str(finalEvent['Start'][1])+str(finalEvent['Start'][2])
+			finalStart = finalEvent['Start'][3]*60 + finalEvent['Start'][4]
+			finalEnd   = finalEvent['End'][3]*60   + finalEvent['End'][4]
+			if self.DetectConflict(finalEvent['Start'],finalEvent['End']) == False:
+				validFinal = True
+		else:
+			validFinal = True
 		# Determine there are sufficient blank block for the preparation event
 		totalFreeTime = 0
 		preparartionHr = event['PreparingTime']['PreparingHours']
-		sufficentBlock = False
-		# the 'end' of pref.workingHr and pref.forbiddenHr don't need pref.timeGap
-		withoutGap = []
-		withoutGap.append(pref.workingHr[1])
-		withoutGap.extend(pref.forbiddenHr[0::2])
 		sufficientTime = False
-
 
 		for blankDate in blank:
 			block = blank[blankDate]
@@ -158,18 +154,13 @@ class ScheduleAlgorithm:
 				start = block[index][0]*60 + block[index][1]
 				end   = block[index+1][0]*60 + block[index+1][1]
 				blankDate = blankDate.replace('-','')
-				if blankDate == date:
-					if start <= finalStart and end >= finalEnd:
-						validFinal = True
 
-				if block[index+1] not in withoutGap:
-					end -= pref.timeGap
 				if end - start < pref.minimumDuration:
 					continue
 				totalFreeTime = totalFreeTime + (end-start)
 		if totalFreeTime/60 >= preparartionHr:
 			sufficientTime = True
-		return validFinal, sufficientTime, withoutGap
+		return validFinal, sufficientTime
 
 	def MakePreparationEventFormat(self,event,timeInfo):
 		gooEvent = {}
@@ -200,7 +191,7 @@ class ScheduleAlgorithm:
 	def AssignBlock(self,event,blankAndEvent,pref,service):
 		# Check conditions
 		blank, numDayEvent = blankAndEvent
-		bValidFinal, bSufficientTime, withoutGap = self.IsEventValid(event,blank,pref)
+		bValidFinal, bSufficientTime = self.IsEventValid(event,blank,pref)
 		# Return message
 		if not bValidFinal and not bSufficientTime:
 			return 'Final event is conflict and the preparation time is insufficient.'
@@ -218,10 +209,7 @@ class ScheduleAlgorithm:
 					continue
 				start = block[index][0]*60 + block[index][1]
 				end   = block[index+1][0]*60 + block[index+1][1]
-				# if the following event is the end of forbiddenHr or workingHr,
-				# don't need to substract with pref.minimumDuration
-				if block[index+1] not in withoutGap: 
-					end -= pref.timeGap
+
 				if end-start < pref.minimumDuration:
 					continue
 
@@ -243,13 +231,14 @@ class ScheduleAlgorithm:
 			service.events().insert(calendarId='primary', body=e).execute()
 
 		# Assign Final Event
-		finEvent = self.MakeFinalEventFormat(event)
-		service.events().insert(calendarId='primary', body=finEvent).execute()
+		if 'FinalEvent' in event:
+			finEvent = self.MakeFinalEventFormat(event)
+			service.events().insert(calendarId='primary', body=finEvent).execute()
 
 		
-		return 'Assign Successfully.'
+		return 'Add big event Successfully.'
 
-	def DetectConflict(self, event):
+	def DetectConflict(self, startTime,endTime):# format:2019-12-27T02:00
 		startD = self.GetUTCtimezone(startTime)
 		endD   = self.GetUTCtimezone(endTime)
 		events = self.service.events().list(calendarId='primary', timeMin=startD,
@@ -280,7 +269,7 @@ class ScheduleAlgorithm:
 			if overlap >0:
 				return True
 		return False
-		
+
 	def NewEvent(self, event, start, end):
 		new = {}
 		exclude = ['id', 'kind', 'etag', 'status', 'htmlLink', 'created', 'updated', 'iCalUID', 'sequence']
@@ -309,7 +298,7 @@ class ScheduleAlgorithm:
 		timeMin = [year, month, day, pref.workingHr[0][0], pref.workingHr[0][1]]
 		timeMax = [year, month, day, pref.workingHr[-1][0], pref.workingHr[-1][1]]
 		timeRange={'start': timeMin, 'end': timeMax}
-		#blank = self.FindBlankBlock(timeRange, pref)
+		blank = self.FindBlankBlock(timeRange, pref)
 		#print(blank)
 		# get all events on the day of the deleted event                
 		events_result = self.service.events().list(calendarId='primary', timeMin=self.GetUTCtimezone(timeMin), timeMax=self.GetUTCtimezone(timeMax), singleEvents=True, orderBy='startTime').execute()
@@ -318,7 +307,6 @@ class ScheduleAlgorithm:
 
 		for i in range(len(events)):
 			if events[i]['summary'][-11:] == 'Preparation': # need to shift the preparation events only
-				blank = self.FindBlankBlock(timeRange, pref)[0]
 			#	print(events[i]['summary'])
 				event_date = events[i]['start']['dateTime'][:10]
 				year, month, day = [int(j) for j in event_date.split('-')]
@@ -367,4 +355,6 @@ Returned data from FindBlankBlock(self,timeRange)
 	{'date': [2019, 12, 16], 'block': [[0, 0], [24, 0]]}
 ]
 
+Need preprocess:
+1. FindBlankBlock() The timeRange must bigger or equal to  today
 '''
