@@ -70,7 +70,7 @@ eventForAssignBlock = {
 	'PreparingTime' : {
 		'Start' : [2019,12,19,8,0],
 		'End'   : [2019,12,26,17,0],
-		'PreparingHours' :3
+		'PreparingHours' :30
 	},
 	'FinalEvent' : {
 		'Start' : [2019,12,26,13,0],
@@ -79,13 +79,63 @@ eventForAssignBlock = {
 	}
 }
 
+def eventList(userInfo,status,Id,remainHr):
+	# The record has to be saved into dabase for summary module
+
+	eventNum = len(status)
+	'''
+	storage = DjangoORMStorage(CredentialsModel, 'id', userInfo, 'credential')
+	credential = storage.get()
+	service = build('calendar', 'v3', credentials=credential)
+	user = User(service)
+	'''
+
+	for i in range(eventNum):
+		if status[i] == 1: # it is completed
+			continue
+		event = userInfo.service.events().get(calendarId='primary', eventId=Id[i]).execute()
+		name = event['summary']
+
+		if name[-12:] == '_Preparation': # It is a non-complete preparation event
+			#Find the preparation time range
+			timeRange = event['description'].split('\n')[1]
+			timeRange = timeRange.split()
+			timeRange = list(map(int,timeRange)) # convert to int
+			import os
+			os.environ['TZ']='Asia/Taipei'
+			tomorrow = datetime.datetime.now() + datetime.timedelta(days=1)
+			tomorrow = datetime.datetime(tomorrow.year,tomorrow.month,tomorrow.day,0,0)
+			timeRangeStart = datetime.datetime(timeRange[0],timeRange[1],timeRange[2],timeRange[3],timeRange[4])
+			if tomorrow>timeRangeStart: 
+				timeRange[0] = tomorrow.year
+				timeRange[1] = tomorrow.month
+				timeRange[2] = tomorrow.day
+				timeRange[3] = tomorrow.hour
+				timeRange[4] = tomorrow.minute
+
+			tRange = {'start':timeRange[0:5], 'end':timeRange[5:10]}
+			blankAndEvent = userInfo.algo.FindBlankBlock(tRange, userInfo.pref)
+			AssignEvent = {	
+				'EventName' : event['summary'],
+				'Description' : event['description'],
+				#'Priority' : ?,
+				'PreparingTime' : {
+					'Start' : tRange['start'],
+					'End'   : tRange['end'],
+					'PreparingHours' :remainHr[i]
+				}
+			}
+
+			userInfo.algo.AssignBlock(AssignEvent,blankAndEvent,userInfo.pref,userInfo.service)
 
 def main():
 	user = User()
 	if user.service:
-		timeRange = {'start':[2019,12,19,8,0], 'end':[2019,12,26,18,0]}
-		blankAndEvent = user.algo.FindBlankBlock(timeRange, user.pref)
-		print(user.algo.AssignBlock(eventForAssignBlock,blankAndEvent,user.pref,user.service))
+		eventList(user,[0],['4adlrr2dc2lj4vo2lm9anl796s'],[2])
+		#timeRange = {'start':[2019,12,19,8,0], 'end':[2019,12,26,18,0]}
+		#blankAndEvent = user.algo.FindBlankBlock(timeRange, user.pref)
+		#print(user.algo.AssignBlock(eventForAssignBlock,blankAndEvent,user.pref,user.service))
+		
 		#eventID = '12345zxczxc678cx9'
 		#user.CreateEvent({'summary':'test API'})
 		#user.UpdateEvent(eventID, {'summary':'update event'})

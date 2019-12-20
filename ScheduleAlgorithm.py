@@ -165,12 +165,13 @@ class ScheduleAlgorithm:
 	def MakePreparationEventFormat(self,event,timeInfo):
 		gooEvent = {}
 		date, start,end = timeInfo
-		date = date.replace('-','')
-		dateList = [int(date[0:4]),int(date[4:6]),int(date[6:8])]
+		date = date.split('-')
+		dateList = [int(date[0]),int(date[1]),int(date[2])]
 		startTime = dateList+[int(start/60),start%60]
 		endTime =  dateList+[int(end/60),end%60]
 
 		gooEvent['summary'] = event['EventName'] + '_Preparation'
+		gooEvent['description'] = event['Description']
 		gooEvent['start'] = {'dateTime': self.GetUTCtimezone(startTime)}
 		gooEvent['end'] = {'dateTime': self.GetUTCtimezone(endTime)}
 		gooEvent['colorId'] = 11
@@ -180,6 +181,7 @@ class ScheduleAlgorithm:
 	def MakeFinalEventFormat(self,event):
 		gooEvent = {}
 		gooEvent['summary'] = event['EventName']
+		gooEvent['description'] = event['Description']
 		finE = event['FinalEvent']
 		gooEvent['start'] = {'dateTime': self.GetUTCtimezone(finE['Start'])}
 		gooEvent['end'] = {'dateTime': self.GetUTCtimezone(finE['End'])}
@@ -188,7 +190,7 @@ class ScheduleAlgorithm:
 		print(gooEvent)
 		return gooEvent
 
-	def AssignBlock(self,event,blankAndEvent,pref,service):
+	def AssignBlock(self,event,blankAndEvent,timeRange,pref,service):
 		# Check conditions
 		blank, numDayEvent = blankAndEvent
 		bValidFinal, bSufficientTime = self.IsEventValid(event,blank,pref)
@@ -201,6 +203,8 @@ class ScheduleAlgorithm:
 			return 'The preparation time is insufficient.'
 
 		# Assign Preparation Event
+		appendDesciption = timeRange['start'] + timeRange['end']
+		strAppendDesciption = " ".join(str(x) for x in appendDesciption)
 		prepMin = event['PreparingTime']['PreparingHours']*60
 		AllEvent = []
 		for date, block in blank.items():
@@ -217,7 +221,7 @@ class ScheduleAlgorithm:
 					end = start +prepMin
 				prepMin -= (end-start)
 				prepEvent = self.MakePreparationEventFormat(event,[date,start,end])
-
+				prepEvent['description'] += '\n' + strAppendDesciption
 				AllEvent.append(prepEvent)
 				numDayEvent[date] += 1
 				if prepMin == 0:
