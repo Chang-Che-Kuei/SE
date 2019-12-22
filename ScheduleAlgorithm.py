@@ -15,6 +15,7 @@ class ScheduleAlgorithm:
 		self.service = service
 
 	def GetUTCtimezone(self,date):
+		date = [int(i) for i in date]
 		d = datetime.datetime(date[0],date[1],date[2],date[3],date[4])
 		#create Taipei timezone
 		tw = pytz.timezone('Asia/Taipei')
@@ -54,6 +55,8 @@ class ScheduleAlgorithm:
 		datetimeStart = datetime.date(start[0],start[1],start[2])
 		dayNum = (datetime.date(end[0], end[1], end[2]) - 
 				  datetime.date(start[0], start[1], start[2]) ).days +1
+		#print(start,end)
+		#print(dayNum,datetime.date(end[0], end[1], end[2])-datetime.date(start[0], start[1], start[2]),'HAHA\n\n')
 		freeTime = self.FilterByPref(dayNum,pref)
 		
 		# Set before start time and after end time to '0'
@@ -190,7 +193,7 @@ class ScheduleAlgorithm:
 		print(gooEvent)
 		return gooEvent
 
-	def AssignBlock(self,event,blankAndEvent,timeRange,pref,service):
+	def AssignBlock(self,event,blankAndEvent,timeRange,pref,service,eventListHr):
 		# Check conditions
 		blank, numDayEvent = blankAndEvent
 		bValidFinal, bSufficientTime = self.IsEventValid(event,blank,pref)
@@ -206,9 +209,15 @@ class ScheduleAlgorithm:
 		appendDesciption = timeRange['start'] + timeRange['end']
 		strAppendDesciption = " ".join(str(x) for x in appendDesciption)
 		prepMin = event['PreparingTime']['PreparingHours']*60
+		strPrepHr = str(event['PreparingTime']['PreparingHours'])
+		if eventListHr != 0:
+			prepMin = eventListHr*60
+
 		AllEvent = []
 		for date, block in blank.items():
 			for index in range(0,len(block),2):
+				if prepMin <= 0:
+					break
 				if numDayEvent[date] >= pref.maxEvents: # Reach daily maximum number events
 					continue
 				start = block[index][0]*60 + block[index][1]
@@ -221,21 +230,21 @@ class ScheduleAlgorithm:
 					end = start +prepMin
 				prepMin -= (end-start)
 				prepEvent = self.MakePreparationEventFormat(event,[date,start,end])
-				prepEvent['description'] += '\n' + strAppendDesciption
+				if eventListHr == 0: # event list doesn't need to add the info of prepRange and prepHr 
+					prepEvent['description'] += '\n' + strAppendDesciption + '\n' + strPrepHr
 				AllEvent.append(prepEvent)
 				numDayEvent[date] += 1
-				if prepMin == 0:
-					break
-			if prepMin == 0:
+			if prepMin <= 0:
 				break
-		if prepMin != 0:
-			print('prepMin = '+str(prepMin))
+		if prepMin > 0:
+			#print('prepMin = '+str(prepMin))
 			return 'Assigning blocks failed due to the number of maximum event.'
 		for e in AllEvent:
 			service.events().insert(calendarId='primary', body=e).execute()
 
 		# Assign Final Event
-		if 'FinalEvent' in event:
+		#if 'FinalEvent' in event:
+		if event['FinalEvent']['Start'] != "":
 			finEvent = self.MakeFinalEventFormat(event)
 			service.events().insert(calendarId='primary', body=finEvent).execute()
 
@@ -250,7 +259,7 @@ class ScheduleAlgorithm:
 		                                    orderBy='startTime').execute()
 		events = events.get('items', [])
 		for event in events:
-			print(event)
+			#print(event)
 			startE = event['start']['dateTime'] # '2019-12-12T16:00:00+08:00'
 			endE = event['end']['dateTime'] 
 			#convert isoforamt to datetime object
